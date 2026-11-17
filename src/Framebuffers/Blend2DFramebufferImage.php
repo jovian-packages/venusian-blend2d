@@ -755,8 +755,12 @@ final class Blend2DFramebufferImage extends FramebufferDelegate implements Compo
     private static function a8(string $mask, int $width, int $height): BLImageCore
     {
         $image = new BLImageCore();
-        $mask = self::own($mask);
-        self::check(bl_image_init_as_from_data($image, $width, $height, BL_FORMAT_A8, $mask, $width, BL_DATA_ACCESS_RW), 'take a coverage mask');
+        // Blend2D's JIT reads and writes an A8 row in 4-byte steps: a row's stride is a multiple of 4, padded with 0
+        $stride = ($width + 3) & ~3;
+        $mask = $stride === $width
+            ? self::own($mask)
+            : implode('', array_map(fn (string $row): string => str_pad($row, $stride, "\0"), str_split($mask, $width)));
+        self::check(bl_image_init_as_from_data($image, $width, $height, BL_FORMAT_A8, $mask, $stride, BL_DATA_ACCESS_RW), 'take a coverage mask');
 
         return $image;
     }

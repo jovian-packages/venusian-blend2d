@@ -3,6 +3,7 @@
 namespace Jovian\Rendering\Blend2D\Rasterization;
 
 use BLContextCore;
+use BLGradientCore;
 use BLImageCore;
 use BLPathCore;
 use BLPoint;
@@ -124,6 +125,27 @@ class Blend2DScanner implements DirectScanner, MaskScanner, ShapeScanner
      */
     public function fill(array $ops, array $colours, PixelMemory $memory): array
     {
+        return $this->draw($ops, $colours, $memory);
+    }
+
+    /**
+     * One op filled with a Blend2D gradient, drawn into $memory inside the clip: its extents inside
+     * the clip, or null when it reaches no pixel there.
+     *
+     * @param  list<mixed>  $op
+     */
+    public function fillGradient(array $op, BLGradientCore $gradient, PixelMemory $memory): ?Region
+    {
+        return $this->draw([$op], [$gradient], $memory)[0];
+    }
+
+    /**
+     * @param  list<list<mixed>>  $ops
+     * @param  list<int|BLGradientCore>  $styles  a straight 0xRRGGBBAA colour, or a gradient
+     * @return list<Region|null>
+     */
+    private function draw(array $ops, array $styles, PixelMemory $memory): array
+    {
         $clip = $this->clip->intersect(new Region(0, 0, $memory->width, $memory->height));
         if (is_null($clip) || $clip->isEmpty()) {
             return array_fill(0, count($ops), null);
@@ -139,17 +161,19 @@ class Blend2DScanner implements DirectScanner, MaskScanner, ShapeScanner
 
         $touched = [];
         foreach ($ops as $i => $op) {
+            $style = $styles[$i];
             [$path, $rule, $bounds] = $this->geometry($op);
             $area = $bounds?->intersect($clip);
-            if (is_null($area) || $area->isEmpty() || ($colours[$i] & 0xFF) === 0) {
+            if (is_null($area) || $area->isEmpty() || (is_int($style) && ($style & 0xFF) === 0)) {
                 $touched[] = null;
 
                 continue;
             }
             self::ok(bl_context_set_fill_rule($context, $rule), 'set the fill rule');
-            // 0xRRGGBBAA, straight, as Blend2D's 0xAARRGGBB
-            $rgba = $colours[$i];
-            self::ok(bl_context_fill_path_d_rgba32($context, new BLPoint(0, 0), $path, (($rgba & 0xFF) << 24) | ($rgba >> 8 & 0xFFFFFF)), 'fill');
+            is_int($style)
+                // 0xRRGGBBAA, straight, as Blend2D's 0xAARRGGBB
+                ? self::ok(bl_context_fill_path_d_rgba32($context, new BLPoint(0, 0), $path, (($style & 0xFF) << 24) | ($style >> 8 & 0xFFFFFF)), 'fill')
+                : self::ok(bl_context_fill_path_d_ext($context, new BLPoint(0, 0), $path, $style), 'fill with a gradient');
             $touched[] = $area;
         }
         self::ok(bl_context_end($context), 'finish drawing');
