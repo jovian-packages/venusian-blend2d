@@ -3,6 +3,7 @@
 namespace Jovian\Rendering\Blend2D\Providers;
 
 use Jovian\Rendering\Blend2D\Framebuffers\Blend2DFramebufferDriver;
+use Jovian\Rendering\Blend2D\Images\Blend2DImageDecoderDriver;
 use Jovian\Rendering\Blend2D\Painting\Blend2DPaintbrushDriver;
 use Jovian\Rendering\Blend2D\Rasterization\Blend2DRasterizationDriver;
 use Jovian\Rendering\Blend2D\Stroking\Blend2DStrokingDriver;
@@ -28,6 +29,7 @@ class VenusianBlend2DServiceProvider extends ServiceProvider
         $this->registerVelvetRasterizationDriver();
         $this->registerVelvetPaintbrushDriver();
         $this->registerStrokingDriver();
+        $this->registerImageDecoder();
     }
 
     /** 'blend2d' on Velvet's framebuffers.
@@ -59,6 +61,15 @@ class VenusianBlend2DServiceProvider extends ServiceProvider
      *
      * @throws ReflectionException
      */
+    /** 'blend2d' on Images' decoders. PNG and JPEG, written straight into a PixelMemory. */
+    protected function registerImageDecoder(): void
+    {
+        if (! extension_loaded('blend2d')) {
+            return;
+        }
+        app('images.decoders')->extend('blend2d', fn () => new Blend2DImageDecoderDriver());
+    }
+
     protected function registerStrokingDriver(): void
     {
         app('strokers')->extend('blend2d', fn () => new Blend2DStrokingDriver());
